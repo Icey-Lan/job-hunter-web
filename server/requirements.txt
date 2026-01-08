@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+playwright
+pandas
+python-multipart
+openpyxl

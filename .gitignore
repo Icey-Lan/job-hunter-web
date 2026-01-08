@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+
+# User Data (each user has their own local data)
+job_details.json
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/

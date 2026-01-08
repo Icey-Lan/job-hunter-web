@@ -1,0 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@layer base {
+    body {
+        @apply font-sans bg-[#F5F5F7] text-slate-900 antialiased;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+}
+
+/* Glassmorphism Utilities */
+.glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-2xl;
+}
+
+.glass-card {
+    @apply bg-white/80 backdrop-blur-md rounded-2xl shadow-sm border border-black/5 hover:shadow-md transition-all duration-300;
+}
