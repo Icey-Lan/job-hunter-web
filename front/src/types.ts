@@ -37,3 +37,36 @@ export interface Task {
     created_at: string;
     updated_at: string;
 }
+
+// ==================== Track Types ====================
+
+export const TRACK_STATUSES = [
+    '待投递', '已投递', '一面', '二面', '三面', '待开奖', 'Offer', '拒绝', '放弃'
+] as const;
+
+export type TrackStatus = typeof TRACK_STATUSES[number];
+
+export const PRIORITIES = ['high', 'medium', 'low'] as const;
+export type Priority = typeof PRIORITIES[number];
+
+export interface TrackedJob {
+    job_id: string;
+    job_url: string;
+    job_title: string;
+    company_name: string;
+
+    // 追踪专有字段
+    track_status: TrackStatus;
+    priority: Priority;
+    added_at: string;
+    applied_at: string | null;
+    interview_at: string | null;
+    notes: string;
+
+    // 分析型标签（预留）
+    analysis_tags: {
+        risk_level: string | null;
+        match_score: number | null;
+    };
+}
+

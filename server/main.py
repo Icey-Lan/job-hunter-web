@@ -112,5 +112,95 @@ def retry_tasks(request: RetryRequest):
         "status": "queued"
     }
 
+# ==================== Track API ====================
+from track_manager import (
+    get_all_tracked_jobs, 
+    add_to_track, 
+    update_track, 
+    delete_from_track, 
+    undo_delete,
+    TrackStatus,
+    Priority
+)
+
+class TrackAddRequest(BaseModel):
+    job_url: str
+    job_title: str
+    company_name: str
+
+class TrackUpdateRequest(BaseModel):
+    job_id: str
+    track_status: str = None
+    priority: str = None
+    applied_at: str = None
+    interview_at: str = None
+    notes: str = None
+
+class TrackDeleteRequest(BaseModel):
+    job_id: str
+
+@app.get("/api/track/list")
+def list_tracked_jobs():
+    """获取所有追踪的岗位"""
+    return get_all_tracked_jobs()
+
+@app.post("/api/track/add")
+def add_tracked_job(request: TrackAddRequest):
+    """添加岗位到追踪列表"""
+    try:
+        job = add_to_track({
+            "job_url": request.job_url,
+            "job_title": request.job_title,
+            "company_name": request.company_name
+        })
+        return {"success": True, "job": job}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/api/track/update")
+def update_tracked_job(request: TrackUpdateRequest):
+    """更新追踪状态/备注/时间"""
+    updates = {}
+    if request.track_status is not None:
+        updates["track_status"] = request.track_status
+    if request.priority is not None:
+        updates["priority"] = request.priority
+    if request.applied_at is not None:
+        updates["applied_at"] = request.applied_at
+    if request.interview_at is not None:
+        updates["interview_at"] = request.interview_at
+    if request.notes is not None:
+        updates["notes"] = request.notes
+    
+    job = update_track(request.job_id, updates)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found in track list")
+    return {"success": True, "job": job}
+
+@app.delete("/api/track/delete")
+def delete_tracked_job(request: TrackDeleteRequest):
+    """从追踪列表移除"""
+    success = delete_from_track(request.job_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Job not found in track list")
+    return {"success": True, "message": "Job removed from track list", "can_undo": True}
+
+@app.post("/api/track/undo")
+def undo_delete_tracked_job(request: TrackDeleteRequest):
+    """撤销删除（30s内有效）"""
+    job = undo_delete(request.job_id)
+    if job is None:
+        raise HTTPException(status_code=400, detail="Cannot undo: timeout or job not found")
+    return {"success": True, "job": job}
+
+@app.get("/api/track/statuses")
+def get_track_statuses():
+    """获取所有可用的追踪状态"""
+    return {
+        "statuses": [s.value for s in TrackStatus],
+        "priorities": [p.value for p in Priority]
+    }
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+

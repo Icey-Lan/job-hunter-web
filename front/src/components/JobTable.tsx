@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
-import { Download, RefreshCw, Briefcase, Trash2, Filter, Settings, Eye, Copy } from 'lucide-react';
+import { Download, RefreshCw, Briefcase, Trash2, Filter, Settings, Eye, Copy, Target } from 'lucide-react';
 import type { Job } from '../types';
 
 // Column definition
@@ -52,6 +53,25 @@ export const JobTable: React.FC = () => {
         return defaults;
     });
     const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
+    const [activeTooltip, setActiveTooltip] = useState<{ x: number, y: number, content: string } | null>(null);
+
+    // Tooltip Timeout Ref
+    const tooltipTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const handleTooltipEnter = (rect: DOMRect, content: string) => {
+        if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
+        setActiveTooltip({
+            x: rect.left,
+            y: rect.bottom + 5,
+            content
+        });
+    };
+
+    const handleTooltipLeave = () => {
+        tooltipTimeoutRef.current = setTimeout(() => {
+            setActiveTooltip(null);
+        }, 300); // 300ms grace period
+    };
 
     const fetchJobs = async () => {
         try {
@@ -239,19 +259,17 @@ export const JobTable: React.FC = () => {
                 );
             case 'job_description':
                 return (
-                    <div className="relative group/tooltip">
-                        <span className="text-xs text-gray-400 block cursor-pointer hover:text-gray-600 line-clamp-3">
+                    <div
+                        className="cursor-pointer"
+                        onMouseEnter={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            handleTooltipEnter(rect, job.job_description);
+                        }}
+                        onMouseLeave={handleTooltipLeave}
+                    >
+                        <span className="text-xs text-gray-400 block hover:text-gray-600 line-clamp-3">
                             {job.job_description.slice(0, 100)}...
                         </span>
-
-                        {/* Bridge to prevent tooltip closing when moving mouse */}
-                        <div className="absolute bottom-full left-0 w-full h-3 bg-transparent z-40 hidden group-hover/tooltip:block"></div>
-
-                        {/* Description Tooltip */}
-                        <div className="absolute bottom-full left-0 mb-2 w-64 p-3 bg-white text-gray-700 text-xs rounded-lg shadow-xl border border-gray-100 opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all z-50 max-h-60 overflow-y-auto break-words leading-relaxed whitespace-pre-wrap pointer-events-auto">
-                            {job.job_description}
-                            <div className="absolute top-full left-4 border-4 border-transparent border-t-white"></div>
-                        </div>
                     </div>
                 );
             case 'action':
@@ -301,6 +319,43 @@ export const JobTable: React.FC = () => {
                             >
                                 <Copy size={16} />
                                 复制 MD ({selectedUrls.size})
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    const selectedJobs = jobs.filter(j => selectedUrls.has(j.job_url));
+                                    let successCount = 0;
+                                    let failCount = 0;
+
+                                    for (const job of selectedJobs) {
+                                        try {
+                                            await axios.post('/api/track/add', {
+                                                job_url: job.job_url,
+                                                job_title: job.job_title,
+                                                company_name: job.company_name
+                                            });
+                                            successCount++;
+                                        } catch (err: any) {
+                                            if (err.response?.status === 400) {
+                                                // 已存在，跳过
+                                                failCount++;
+                                            } else {
+                                                console.error("Failed to add to track", err);
+                                                failCount++;
+                                            }
+                                        }
+                                    }
+
+                                    if (successCount > 0) {
+                                        alert(`成功添加 ${successCount} 个岗位到追踪列表！${failCount > 0 ? `（${failCount} 个已存在）` : ''}`);
+                                        setSelectedUrls(new Set());
+                                    } else if (failCount > 0) {
+                                        alert(`所选 ${failCount} 个岗位均已在追踪列表中`);
+                                    }
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-600 border border-green-100 rounded-lg text-sm font-medium hover:bg-green-100 transition-all shadow-sm animate-in fade-in slide-in-from-right-4 duration-200"
+                            >
+                                <Target size={16} />
+                                添加追踪 ({selectedUrls.size})
                             </button>
                             <button
                                 onClick={handleDelete}
@@ -467,7 +522,7 @@ export const JobTable: React.FC = () => {
                     </thead>
                     <tbody className="bg-transparent divide-y divide-gray-50">
                         {filteredJobs.map((job, idx) => (
-                            <tr key={idx} className={`group transition-colors ${selectedUrls.has(job.job_url) ? 'bg-blue-50/50' : 'hover:bg-white/60'}`}>
+                            <tr key={idx} className={`group transition-colors ${selectedUrls.has(job.job_url) ? 'bg-blue-50/50' : 'hover:bg-white/60'} hover:relative hover:z-[80]`}>
                                 <td className="px-4 py-3 sticky left-0 z-20 bg-white group-hover:bg-blue-50/50 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]">
                                     <input
                                         type="checkbox"
@@ -516,6 +571,27 @@ export const JobTable: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+            {/* Portal Tooltip */}
+            {activeTooltip && createPortal(
+                <div
+                    className="fixed z-[9999] bg-white text-gray-700 text-xs rounded-lg shadow-xl border border-gray-100 p-3 max-w-sm break-words leading-relaxed whitespace-pre-wrap pointer-events-auto animate-in fade-in duration-200"
+                    style={{
+                        top: activeTooltip.y + 4,
+                        left: Math.min(activeTooltip.x, window.innerWidth - 300),
+                        maxHeight: '300px',
+                        overflowY: 'auto'
+                    }}
+                    onMouseEnter={() => {
+                        if (tooltipTimeoutRef.current) clearTimeout(tooltipTimeoutRef.current);
+                    }}
+                    onMouseLeave={handleTooltipLeave}
+                >
+                    {activeTooltip.content}
+                    {/* Small arrow pointing up */}
+                    <div className="absolute bottom-full left-4 border-4 border-transparent border-b-white"></div>
+                </div>,
+                document.body
+            )}
         </div >
     );
 };
